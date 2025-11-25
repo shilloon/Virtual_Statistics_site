@@ -3,15 +3,20 @@ from stats.models import GameUser, PlayerStats, Item, Skill, ItemUsage, SkillUsa
 
 class ItemSerializer(serializers.ModelSerializer):
     """아이템 정보"""
+
+    total_usage = serializers.IntegerField(read_only=True, default = 0)
+
     class Meta:
         model = Item
-        fields = ['id', 'name', 'item_type', 'description', 'price']
+        fields = ['id', 'name', 'item_type', 'description', 'price', 'total_usage']
 
 class SkillSerializer(serializers.ModelSerializer):
     """스킬 정보"""
+    total_usage = serializers.IntegerField(read_only=True, default = 0)
+
     class Meta:
         model = Skill
-        fields = ['id', 'name', 'skill_type', 'description', 'cooldown']
+        fields = ['id', 'name', 'skill_type', 'description', 'cooldown', 'total_usage']
 
 class ItemUsageSerializer(serializers.ModelSerializer):
     """아이템 사용 기록"""

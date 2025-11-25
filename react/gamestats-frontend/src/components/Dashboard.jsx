@@ -28,7 +28,7 @@ const Dashboard = () => {
 
     if(loading){
         return(
-            <div className='flex jusitfy-center items-center h-64'>
+            <div className='flex justify-center items-center h-64'>
                 <div className='text-xl'>로딩 중...</div>
             </div>
         );
@@ -79,7 +79,7 @@ const Dashboard = () => {
                             label={({name, percent}) => `${name} ${(percent * 100).toFixed(0)}%`}
                             outerRadius={100}
                             fill="#8884d8"
-                            datakey="value"
+                            dataKey="value"
                         >
                             {chartData.map((entry, index) => (
                                 <Cell key = {`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -107,14 +107,14 @@ const Dashboard = () => {
                         </thead>
                         <tbody>
                             {topRankers.map((user, index) => (
-                                <tr key = {user.id} className='border-b horver:bg-gray-50'>
+                                <tr key = {user.id} className='border-b hover:bg-gray-50'>
                                     <td className="px-4 py-2">{index + 1}</td>
                                     <td className="px-4 py-2 font-semibold">{user.nickname}</td>
                                     <td className="px-4 py-2">
                                         <span className = {`px-2 py-1 rounded text-sm ${
                                             user.tier === 'GRANDMASTER' ? 'bg-red-100 text-red-800' :
                                             user.tier === 'MASTER' ? 'bg-purple-100 text-purple-800':
-                                            user.tier === 'DIAMOND' ? 'bj-blue-100 text-blue-800' :
+                                            user.tier === 'DIAMOND' ? 'bg-blue-100 text-blue-800' :
                                             'bg-gray-100 text-gray-800'
                                         }`}>
                                             {user.tier}

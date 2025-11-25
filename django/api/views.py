@@ -27,7 +27,14 @@ class GameUserViewSet(viewsets.ReadOnlyModelViewSet):
     def top_rankers(self, request):
         """상위 랭킹 유저 조회"""
         limit = int(request.query_params.get('limit', 100))
-        top_users = GameUser.objects.select_related('stats').order_by('-ranking_score')[:limit]
+        tier = request.query_params.get('tier', None)
+
+        queryset = GameUser.objects.select_related('stats')
+
+        if tier and tier != 'ALL':
+            queryset = queryset.filter(tier=tier)
+
+        top_users = queryset.order_by('-ranking_score')[:limit]
         serializer = self.get_serializer(top_users, many=True)
         return Response(serializer.data)
     

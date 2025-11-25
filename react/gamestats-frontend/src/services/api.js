@@ -12,7 +12,13 @@ const api = axios.create({
 // 유저 관련 API
 export const getUsers = (page = 1) => api.get(`/users/?page=${page}`);
 export const getUserDetail = (id) => api.get(`/users/${id}/`);
-export const getTopRankers = (limit = 100) => api.get(`/users/top_rankers/?limit=${limit}`);
+export const getTopRankers = (limit = 100, tier = 'ALL') =>{
+    let url = `/users/top_rankers/?limit=${limit}`;
+    if(tier && tier !== 'ALL'){
+        url += `&tier=${tier}`;
+    }
+    return api.get(url);
+};
 export const getTierStats = () => api.get('/users/tier_stats/');
 
 // 아이템 관련 API

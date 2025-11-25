@@ -4,7 +4,7 @@ import { getTopRankers } from '../services/api';
 const RankingTable = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [limit, setLimit] = useState(100);
+    const [limit, setLimit] = useState(500);
     const [selectedTier, setSelectedTier] = useState('ALL');
 
     const tiers = ['ALL', 'BRONZE', 'SILVER', 'GOLD', 'PLATINUM', 'DIAMOND', 'MASTER', 'GRANDMASTER'];
@@ -13,7 +13,7 @@ const RankingTable = () => {
         const fetchRankers = async () => {
             setLoading(true);
             try{
-                const response = await getTopRankers(limit);
+                const response = await getTopRankers(limit, selectedTier);
                 setUsers(response.data);
                 setLoading(false);
             }
@@ -23,7 +23,7 @@ const RankingTable = () => {
             }
         };
         fetchRankers();
-    }, [limit]);
+    }, [limit, selectedTier]);
 
     // 티어 필터링
     const filteredUsers = selectedTier === 'ALL' ? users : users.filter(user => user.tier === selectedTier);
@@ -93,7 +93,7 @@ const RankingTable = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredUsers.map((user, index) => (
+              {filteredUsers.slice(0, limit).map((user, index) => (
                 <tr 
                   key={user.id} 
                   className={`border-b hover:bg-gray-50 ${
@@ -101,9 +101,9 @@ const RankingTable = () => {
                   }`}
                 >
                   <td className="px-4 py-3">
-                    {index === 0}
-                    {index === 1}
-                    {index === 2}
+                    {index === 0 && '🥇'}
+                    {index === 1 && '🥈'}
+                    {index === 2 && '🥉'}
                     {index > 2 && index + 1}
                   </td>
                   <td className="px-4 py-3 font-semibold">{user.nickname}</td>

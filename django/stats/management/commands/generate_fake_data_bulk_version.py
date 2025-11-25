@@ -7,7 +7,7 @@ from stats.models import GameUser, PlayerStats, Item, Skill, ItemUsage, SkillUsa
 from faker import Faker
 
 BATCH_SIZE = 500
-USER_SIZE = 1000
+USER_SIZE = 5000
 
 class Command(BaseCommand):
     help = '테스트용 게임 데이터를 생성합니다'
