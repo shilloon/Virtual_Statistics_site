@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.db.models import Count, Avg, Q
+from django.db import connection
 from stats.models import GameUser, PlayerStats, Item, Skill, ItemUsage, SkillUsage
 from .serializers import(
     GameUserSerializer,
@@ -10,6 +11,8 @@ from .serializers import(
     SkillSerializer,
     PlayerStatsSerializer
 )
+import time
+
 
 # Create your views here.
 class GameUserViewSet(viewsets.ReadOnlyModelViewSet):
@@ -70,32 +73,76 @@ class ItemViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def popular_items(self, request):
         """인기 아이템 (사용 빈도 기준)"""
+        start = time.time()
+
         item_type = request.query_params.get('type', None)
         tier = request.query_params.get('tier', None)
         limit = int(request.query_params.get('limit', 10))
 
-        # 기본 쿼리
-        queryset = Item.objects.annotate(
-            total_usage = Count('item_usages')
-        )
-
-        # 필터링
-        if item_type:
-            queryset = queryset.filter(item_type = item_type)
+        with connection.cursor() as cursor:
+            if tier and tier != 'ALL':
+                sql = """
+                    SELECT 
+                        i.id,
+                        i.name,
+                        i.item_type,
+                        i.description,
+                        i.price,
+                        SUM(iu.usage_count) as total_usage
+                    FROM stats_item i
+                    INNER JOIN stats_itemusage iu ON i.id = iu.item_id
+                    INNER JOIN stats_playerstats ps ON iu.player_stats_id = ps.id
+                    INNER JOIN stats_gameuser u ON ps.user_id = u.id
+                    WHERE u.tier = %s
+                """
+                params = [tier]
+                
+                if item_type:
+                    sql += " AND i.item_type = %s"
+                    params.append(item_type)
+                
+                sql += """
+                    GROUP BY i.id, i.name, i.item_type, i.description, i.price
+                    ORDER BY total_usage DESC
+                    LIMIT %s
+                """
+                params.append(limit)
+            else:
+                # 전체 조회
+                sql = """
+                    SELECT 
+                        i.id,
+                        i.name,
+                        i.item_type,
+                        i.description,
+                        i.price,
+                        SUM(iu.usage_count) as total_usage
+                    FROM stats_item i
+                    LEFT JOIN stats_itemusage iu ON i.id = iu.item_id
+                """
+                params = []
+                
+                if item_type:
+                    sql += " WHERE i.item_type = %s"
+                    params.append(item_type)
+                
+                sql += """
+                    GROUP BY i.id, i.name, i.item_type, i.description, i.price
+                    ORDER BY total_usage DESC
+                    LIMIT %s
+                """
+                params.append(limit)
+            
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        # 특정 티어 유저들의 아이템 사용만 잡계
-        if tier:
-            queryset = queryset.filter(
-                item_usages__player_stats__user__tier=tier
-            ).annotate(
-                tier_usage = Count('item_usages')
-            ).order_by('-tier_usage')[:limit]
-        else:
-            queryset = queryset.order_by('-total_usage')[:limit]
+        elapsed = time.time() - start
+        print(f"popular_items 실행시간: {elapsed:.3f}초, 결과: {len(results)}개")
+        
+        return Response(results)
 
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
-    
+
 class SkillViewSet(viewsets.ReadOnlyModelViewSet):
     """스킬 API"""
     queryset = Skill.objects.all()
@@ -104,31 +151,73 @@ class SkillViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=['get'])
     def popular_skills(self, request):
         """인기 스킬 (사용 빈도 기준)"""
+        start = time.time()
+
         skill_type = request.query_params.get('type', None)
         tier = request.query_params.get('tier', None)
         limit = int(request.query_params.get('limit', 10))
 
-        # 기본 쿼리
-        queryset = Skill.objects.annotate(
-            total_usage = Count('skill_usages')
-        )
-
-        # 필터링
-        if skill_type:
-            queryset = queryset.filter(skill_type=skill_type)
-
-        # 특정 티어 유저들의 스킬 사용만 집계
-        if tier:
-            queryset = queryset.filter(
-                skill_usages__player_stats__user__tier=tier
-            ).annotate(
-                tier_usage = Count('skill_usages')
-            ).order_by('-tier_usage')[:limit]
-        else:
-            queryset = queryset.order_by('-total_usage')[:limit]
+        with connection.cursor() as cursor:
+            if tier and tier != 'ALL':
+                sql = """
+                    SELECT 
+                        s.id,
+                        s.name,
+                        s.skill_type,
+                        s.description,
+                        s.cooldown,
+                        SUM(su.usage_count) as total_usage
+                    FROM stats_skill s
+                    INNER JOIN stats_skillusage su ON s.id = su.skill_id
+                    INNER JOIN stats_playerstats ps ON su.player_stats_id = ps.id
+                    INNER JOIN stats_gameuser u ON ps.user_id = u.id
+                    WHERE u.tier = %s
+                """
+                params = [tier]
+                
+                if skill_type:
+                    sql += " AND s.skill_type = %s"
+                    params.append(skill_type)
+                
+                sql += """
+                    GROUP BY s.id, s.name, s.skill_type, s.description, s.cooldown
+                    ORDER BY total_usage DESC
+                    LIMIT %s
+                """
+                params.append(limit)
+            else:
+                sql = """
+                    SELECT 
+                        s.id,
+                        s.name,
+                        s.skill_type,
+                        s.description,
+                        s.cooldown,
+                        SUM(su.usage_count) as total_usage
+                    FROM stats_skill s
+                    LEFT JOIN stats_skillusage su ON s.id = su.skill_id
+                """
+                params = []
+                
+                if skill_type:
+                    sql += " WHERE s.skill_type = %s"
+                    params.append(skill_type)
+                
+                sql += """
+                    GROUP BY s.id, s.name, s.skill_type, s.description, s.cooldown
+                    ORDER BY total_usage DESC
+                    LIMIT %s
+                """
+                params.append(limit)
+            
+            cursor.execute(sql, params)
+            columns = [col[0] for col in cursor.description]
+            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
         
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
+        elapsed = time.time() - start
+        print(f"popular_skills 실행시간: {elapsed:.3f}초, 결과: {len(results)}개")
+        
+        return Response(results)
     
 class StatsViewSet(viewsets.ViewSet):
     """통계 분석 API"""
@@ -136,51 +225,92 @@ class StatsViewSet(viewsets.ViewSet):
     @action(detail=False, methods=['get'])
     def top_players_items(self, request):
         """상위 랭커들이 많이 사용하는 아이템"""
+        start = time.time()
         top_percent = int(request.query_params.get('top_percent', 10))
 
         # 상위 N% 유저 계산
         total_users = GameUser.objects.count()
         top_count = int(total_users * top_percent / 100)
 
-        top_users = GameUser.objects.order_by('-ranking_score')[:top_count]
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT
+                    i.id,
+                    i.name,
+                    i.item_type,
+                    i.description,
+                    i.price,
+                    COUNT(iu.id) as usage_count
+                FROM stats_item i
+                LEFT JOIN stats_itemusage iu ON i.id = iu.item_id
+                LEFT JOIN stats_playerstats ps ON iu.player_stats_id = ps.id
+                LEFT JOIN stats_gameuser u ON ps.user_id = u.id
+                WHERE u.id IN (
+                    SELECT id FROM stats_gameuser
+                    ORDER BY ranking_score DESC
+                    LIMIT %s
+                )
+                GROUP BY i.id, i.name, i.item_type, i.description, i.price
+                ORDER BY usage_count DESC
+                LIMIT 20
+            """
+            cursor.execute(sql, [top_count])
+            columns = [col[0] for col in cursor.description]
+            items = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        elapsed = time.time() - start
+        print(f"top_players_items 실행시간: {elapsed:.3f}초")
 
-        # 해당 유저들의 아이템 사용 집계
-        popular_items = Item.objects.filter(
-            item_usages__player_stats__user__in = top_users
-        ).annotate(
-            usage_count = Count('item_usages')
-        ).order_by('-usage_count')[:20]
-
-        serializer = ItemSerializer(popular_items, many=True)
         return Response({
             'top_percent': top_percent,
             'top_user_count' : top_count,
-            'items' : serializer.data
+            'items' : items
         })
     
     @action(detail=False, methods=['get'])
     def top_players_skills(self, request):
         """상위 랭커들이 가장 많이 사용하는 스킬"""
+        start = time.time()
         top_percent = int(request.query_params.get('top_percent', 10))
 
         # 상위 N% 유저 계산
         total_users = GameUser.objects.count()
         top_count = int(total_users * top_percent / 100)
 
-        top_users = GameUser.objects.order_by('-ranking_score')[:top_count]
+        with connection.cursor() as cursor:
+            sql = """
+                SELECT
+                    s.id,
+                    s.name,
+                    s.skill_type,
+                    s.description,
+                    s.cooldown,
+                    COUNT(su.id) as usage_count
+                FROM stats_skill s
+                LEFT JOIN stats_skillusage su ON s.id = su.skill_id
+                LEFT JOIN stats_playerstats ps ON su.player_stats_id = ps.id
+                LEFT JOIN stats_gameuser u ON ps.user_id = u.id
+                WHERE u.id IN(
+                    SELECT id FROM stats_gameuser
+                    ORDER BY ranking_score DESC
+                    LIMIT %s
+                )
+                GROUP BY s.id, s.name, s.skill_type, s.description, s.cooldown
+                ORDER BY usage_count DESC
+                LIMIT 20
+            """
 
-        # 해당 유저들의 스킬 사용 집계
-        popular_skills = Skill.objects.filter(
-            skill_usages__player_stats__user__in = top_users
-        ).annotate(
-            usage_count = Count('skill_usages')
-        ).order_by('-usage_count')[:20]
+            cursor.execute(sql, [top_count])
+            columns = [col[0] for col in cursor.description]
+            skills = [dict(zip(columns, row)) for row in cursor.fetchall()]
+        
+        elapsed = time.time() - start
+        print(f"top_players_skills 실행시간: {elapsed:.3f}초")
 
-        serializer = SkillSerializer(popular_skills, many=True)
         return Response({
             'top_percent' : top_percent,
             'top_user_count' : top_count,
-            'skills' : serializer.data
+            'skills' : skills
         })
 
 
